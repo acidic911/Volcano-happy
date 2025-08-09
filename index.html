@@ -3,128 +3,83 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Volcano Hybrid • Web Controller (All-in-One)</title>
+<title>Volcano Hybrid • Web Controller</title>
 <meta name="theme-color" content="#0b0b0c">
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:#0b0b0c;color:#eaeaea;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
-.wrap{max-width:960px;margin:0 auto;padding:16px}
+.wrap{max-width:940px;margin:0 auto;padding:16px}
 h1{letter-spacing:.08em;margin:10px 0 14px}
-h3{margin:8px 0}
 .card{background:#101115;border:1px solid #1c1c21;border-radius:14px;padding:14px;margin:10px 0}
 .row{margin:6px 0}.small{opacity:.85}
 button{background:#1c1c1f;color:#eaeaea;border:1px solid #2d2d32;padding:10px 14px;border-radius:12px;margin:6px;cursor:pointer}
 button:hover{background:#232327}
-input,select{padding:8px;border-radius:10px;border:1px solid #2d2d32;background:#0f0f12;color:#eaeaea}
+input{padding:8px;border-radius:10px;border:1px solid #2d2d32;background:#0f0f12;color:#eaeaea}
 input[type=number]{width:140px}
 input[type=text]{width:100%;max-width:520px}
 pre{background:#0f0f12;border:1px solid #2d2d32;border-radius:10px;padding:10px;max-height:360px;overflow:auto;font-size:12px}
 .grid{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
-kbd{background:#222;padding:2px 6px;border-radius:6px;border:1px solid #333}
-label{display:block;margin:6px 0}
-code{background:#0f0f12;padding:2px 6px;border-radius:6px;border:1px solid #2d2d32}
-hr{border:none;border-top:1px solid #1c1c21;margin:12px 0}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>VOLCANO HYBRID • Web Controller (All-in-One)</h1>
+  <h1>VOLCANO HYBRID • Web Controller</h1>
 
   <div class="card">
-    <div class="small">
-      iPhone: use <b>Bluefy/WebBLE</b> (Safari doesn’t support Web Bluetooth). Close the official S&B app first.
-    </div>
+    <div class="small">iPhone: use <b>Bluefy/WebBLE</b>. Close the official S&B app first.</div>
     <div class="row">Status: <span id="status">Idle</span></div>
     <div class="grid">
-      <button id="btnBroad">Connect (Broad scan)</button>
-      <input id="namePrefix" type="text" value="VOLCANO" style="width:160px">
-      <button id="btnByName">Connect (name prefix)</button>
-    </div>
-    <div class="grid">
-      <input id="svcInput" type="text" placeholder="Service UUID to scan (e.g., 10110000-5354-4F52-5A26-4249434B454C)" />
-      <button id="btnByService">Connect (by service UUID)</button>
-    </div>
-    <div class="grid">
-      <button id="btnWithOptional">Reconnect with optionalServices</button>
-      <span class="small">Use if discovery shows “not allowed to access service”.</span>
+      <button id="btnConnect">Connect (Broad scan)</button>
+      <button id="btnDiscover">Re-discover</button>
     </div>
     <div class="row">Device: <span id="devName">—</span></div>
   </div>
 
   <div class="card">
-    <h3>Discovery</h3>
-    <div class="grid">
-      <button id="btnDiscover">Discover services & characteristics</button>
-      <button id="btnClearMap">Clear saved mapping</button>
-    </div>
-    <div class="small">You’ll see <code>FOUND</code> and <code>READ</code> lines below like your working scan.</div>
-  </div>
-
-  <div class="card">
-    <h3>Mapping (saved locally)</h3>
-    <div class="cols">
-      <label>Service (control/system)
-        <input id="mapSvcCtrl" type="text" value="00000001-1989-0108-1234-123456789ABC">
-      </label>
-      <label>Service (temp/setpoint)
-        <input id="mapSvcTemp" type="text" value="10110000-5354-4F52-5A26-4249434B454C">
-      </label>
-      <label>Temp (notify, tenths °C)
-        <input id="mapTempN" type="text" value="10110001-5354-4F52-5A26-4249434B454C">
-      </label>
-      <label>Setpoint (notify, whole °C)
-        <input id="mapSpN" type="text" value="1011000E-5354-4F52-5A26-4249434B454C">
-      </label>
-      <label>Setpoint (write, tenths °C)
-        <input id="mapSpW" type="text" value="1011000D-5354-4F52-5A26-4249434B454C">
-      </label>
-      <label>Heater cmd (write 0/1)
-        <input id="mapHeater" type="text" placeholder="try 1011000F-..., 1011000C-..., 1010000C/D-...">
-      </label>
-      <label>Fan cmd (write 0/1)
-        <input id="mapFan" type="text" placeholder="try 1010000C/D-..., 1011000F/C-...">
-      </label>
-    </div>
-    <div class="grid">
-      <button id="btnSaveMap">Save mapping</button>
-      <span class="small">Tip: press physical buttons and watch which UUID notifies; paste it here.</span>
-    </div>
+    <h3>Readouts</h3>
+    <div class="row">Current temp: <b><span id="curTemp">—</span> °C</b></div>
+    <div class="row">Setpoint: <b><span id="sp">—</span> °C</b></div>
   </div>
 
   <div class="card">
     <h3>Controls</h3>
-    <div class="row">Current temp: <b><span id="curTemp">—</span> °C</b></div>
-    <div class="row">Setpoint: <b><span id="sp">—</span> °C</b></div>
     <div class="grid">
       <input type="number" id="inpSet" min="150" max="225" value="190">
       <button id="btnSet">Set Temp</button>
       <button id="btnHeater">Heater On/Off</button>
       <button id="btnFan">Fan On/Off</button>
-      <button id="btnProbeToggles">Probe All Toggles</button>
-    </div>
-    <div class="grid">
-      <button data-preset="175,190,205">Terp Flight</button>
-      <button data-preset="185,195,205">Balanced</button>
-      <button data-preset="190,205,215">Medical</button>
+      <button id="btnProbe">Probe Toggles</button>
+      <button id="btnMonitor">Monitor All</button>
     </div>
   </div>
 
   <div class="card">
-    <h3>Raw GATT tools</h3>
+    <h3>Mapping (edit if needed → Save)</h3>
     <div class="cols">
-      <label>Characteristic UUID
-        <input id="rawChar" type="text" placeholder="uuid e.g. 10110001-5354-4F52-5A26-4249434B454C">
+      <label>Temp service
+        <input id="svcTemp" type="text" value="10110000-5354-4F52-5A26-4249434B454C">
       </label>
-      <label>Payload (hex for write)
-        <input id="rawHex" type="text" placeholder="e.g. 01 or 6e 07 or 6e 07 00 00">
+      <label>Temp notify (tenths °C)
+        <input id="charTempN" type="text" value="10110001-5354-4F52-5A26-4249434B454C">
+      </label>
+      <label>Setpoint notify
+        <input id="charSpN" type="text" value="1011000E-5354-4F52-5A26-4249434B454C">
+      </label>
+      <label>Setpoint write
+        <input id="charSpW" type="text" value="1011000D-5354-4F52-5A26-4249434B454C">
+      </label>
+      <label>Heater command
+        <input id="charHeater" type="text" value="1011000F-5354-4F52-5A26-4249434B454C">
+      </label>
+      <label>Fan command
+        <input id="charFan" type="text" value="1011000C-5354-4F52-5A26-4249434B454C">
       </label>
     </div>
     <div class="grid">
-      <button id="btnRawRead">Read</button>
-      <button id="btnRawNotify">Subscribe</button>
-      <button id="btnRawWrite">Write</button>
+      <button id="btnSaveMap">Save</button>
+      <button id="btnClearMap">Clear</button>
     </div>
   </div>
 
@@ -135,117 +90,76 @@ hr{border:none;border-top:1px solid #1c1c21;margin:12px 0}
 </div>
 
 <script>
-/* ===== Known UUIDs (your scans) ===== */
-const DEFAULTS = {
-  svcCtrl: "00000001-1989-0108-1234-123456789ABC",
-  svcTemp: "10110000-5354-4F52-5A26-4249434B454C",
-  tempN:   "10110001-5354-4F52-5A26-4249434B454C",
-  spW:     "1011000D-5354-4F52-5A26-4249434B454C",
-  spN:     "1011000E-5354-4F52-5A26-4249434B454C",
-};
-const CANDIDATE_TOGGLES = [
-  "1011000F-5354-4F52-5A26-4249434B454C",
-  "1011000C-5354-4F52-5A26-4249434B454C",
-  "1010000C-5354-4F52-5A26-4249434B454C",
-  "1010000D-5354-4F52-5A26-4249434B454C",
-];
+/* ---------- UI refs ---------- */
+const statusEl = document.getElementById('status');
+const devName  = document.getElementById('devName');
+const logEl    = document.getElementById('log');
+const curTemp  = document.getElementById('curTemp');
+const spEl     = document.getElementById('sp');
+const inpSet   = document.getElementById('inpSet');
 
-/* ===== UI handles ===== */
-const statusEl=document.getElementById('status');
-const devNameEl=document.getElementById('devName');
-const logEl=document.getElementById('log');
-const curTempEl=document.getElementById('curTemp');
-const spEl=document.getElementById('sp');
-const inpSet=document.getElementById('inpSet');
-const namePrefixEl=document.getElementById('namePrefix');
-const svcInputEl=document.getElementById('svcInput');
+const svcTemp  = document.getElementById('svcTemp');
+const charTempN= document.getElementById('charTempN');
+const charSpN  = document.getElementById('charSpN');
+const charSpW  = document.getElementById('charSpW');
+const charHeater = document.getElementById('charHeater');
+const charFan    = document.getElementById('charFan');
 
-const mapSvcCtrl=document.getElementById('mapSvcCtrl');
-const mapSvcTemp=document.getElementById('mapSvcTemp');
-const mapTempN=document.getElementById('mapTempN');
-const mapSpN=document.getElementById('mapSpN');
-const mapSpW=document.getElementById('mapSpW');
-const mapHeater=document.getElementById('mapHeater');
-const mapFan=document.getElementById('mapFan');
-
-const rawChar=document.getElementById('rawChar');
-const rawHex=document.getElementById('rawHex');
-
-/* ===== State ===== */
+/* ---------- State ---------- */
 let device, server;
-let chars = new Map(); // key: "service|char" -> characteristic
-let discovered=false;
-let heaterUUID = localStorage.getItem('heaterUUID') || "";
-let fanUUID    = localStorage.getItem('fanUUID')    || "";
+let chars = new Map();   // "service|char" -> characteristic
+let discovered = false;
 const MIN=150, MAX=225;
 
-/* ===== Utils ===== */
 function log(s){ console.log(s); logEl.textContent=(s+"\n"+logEl.textContent).slice(0,70000); }
 function setStatus(s){ statusEl.textContent=s; }
 function clamp(v){ v=Number(v)||0; return Math.max(MIN, Math.min(MAX, Math.round(v))); }
 function toTenths2(c){ const t=Math.round(c*10); const b=new ArrayBuffer(2); new DataView(b).setUint16(0,t,true); return new Uint8Array(b); }
 function toTenths4(c){ const t=Math.round(c*10); const b=new ArrayBuffer(4); new DataView(b).setUint32(0,t,true); return new Uint8Array(b); }
 function hex(u8){ return Array.from(u8).map(b=>b.toString(16).padStart(2,'0')).join(' '); }
-function parseHex(s){
-  const arr=(s||"").trim().split(/\s+/).filter(Boolean);
-  return new Uint8Array(arr.map(h=>parseInt(h,16)||0));
-}
 
-/* ===== Mapping save/load ===== */
-function saveMap(){
-  const m={
-    svcCtrl:mapSvcCtrl.value.trim(),
-    svcTemp:mapSvcTemp.value.trim(),
-    tempN:mapTempN.value.trim(),
-    spN:mapSpN.value.trim(),
-    spW:mapSpW.value.trim(),
-    heater:mapHeater.value.trim(),
-    fan:mapFan.value.trim()
-  };
-  localStorage.setItem('volcanoMap', JSON.stringify(m));
-  if(m.heater) localStorage.setItem('heaterUUID', m.heater);
-  if(m.fan)    localStorage.setItem('fanUUID', m.fan);
-  log("Saved mapping.");
-}
-function loadMap(){
+/* smart write: with-response if supported, else no-response */
+async function writeSmart(ch, bytes){
   try{
-    const m=JSON.parse(localStorage.getItem('volcanoMap')||'{}');
-    mapSvcCtrl.value = m.svcCtrl || DEFAULTS.svcCtrl;
-    mapSvcTemp.value = m.svcTemp || DEFAULTS.svcTemp;
-    mapTempN.value   = m.tempN   || DEFAULTS.tempN;
-    mapSpN.value     = m.spN     || DEFAULTS.spN;
-    mapSpW.value     = m.spW     || DEFAULTS.spW;
-    mapHeater.value  = m.heater  || heaterUUID;
-    mapFan.value     = m.fan     || fanUUID;
-  }catch{
-    mapSvcCtrl.value = DEFAULTS.svcCtrl;
-    mapSvcTemp.value = DEFAULTS.svcTemp;
-    mapTempN.value   = DEFAULTS.tempN;
-    mapSpN.value     = DEFAULTS.spN;
-    mapSpW.value     = DEFAULTS.spW;
+    if(ch.properties.write && ch.writeValue){ await ch.writeValue(bytes); }
+    else { await ch.writeValueWithoutResponse(bytes); }
+  }catch(e){
+    if(ch.writeValueWithoutResponse){ await ch.writeValueWithoutResponse(bytes); }
+    else throw e;
   }
 }
-loadMap();
 
-/* ===== Cache lookup ===== */
-function getCharByUUID(charUUID){
+/* cache lookup by char UUID */
+function getCharByUUID(uuid){
   for(const [key,ch] of chars.entries()){
-    if(key.endsWith('|'+charUUID)) return ch;
+    if(key.endsWith('|'+uuid)) return ch;
   }
-  throw new Error('Characteristic not found: '+charUUID);
+  throw new Error('Characteristic not found: '+uuid);
 }
 
-/* ===== Subscribe helper ===== */
-async function subscribeIf(ch, onValue){
+/* subscribe helper */
+async function subscribeIf(ch, cb){
   try{
     if(ch && (ch.properties.notify || ch.properties.indicate)){
       await ch.startNotifications();
-      ch.addEventListener('characteristicvaluechanged', e => onValue(e.target.value));
+      ch.addEventListener('characteristicvaluechanged', e => cb(e.target.value));
     }
   }catch(e){ log('subscribe failed: '+e); }
 }
 
-/* ===== Discovery ===== */
+/* -------- connect & discover -------- */
+async function connect(){
+  if(!navigator.bluetooth){ alert('Use Bluefy/WebBLE on iPhone.'); return; }
+  setStatus('Scanning…');
+  device = await navigator.bluetooth.requestDevice({ acceptAllDevices:true });
+  devName.textContent = device.name || device.id || 'Volcano';
+  setStatus('Connecting…');
+  server = await device.gatt.connect();
+  setStatus('Connected');
+  await discoverAll();
+  setStatus('Ready');
+}
+
 async function discoverAll(){
   chars.clear(); discovered=false;
   const services = await server.getPrimaryServices();
@@ -256,203 +170,193 @@ async function discoverAll(){
         const key = `${svc.uuid}|${ch.uuid}`;
         chars.set(key, ch);
         log(`FOUND ${key} props=${JSON.stringify({
-          read:  !!ch.properties.read,
-          write: !!(ch.properties.write || ch.properties.writeWithoutResponse),
+          read:!!ch.properties.read,
+          write:!!(ch.properties.write||ch.properties.writeWithoutResponse),
           notify:!!ch.properties.notify
         })}`);
         if(ch.properties.read){
           try{
-            const v = await ch.readValue();
+            const v=await ch.readValue();
             log(`READ ${key} = [${Array.from(new Uint8Array(v.buffer)).join(', ')}]`);
           }catch{}
         }
       }
     }catch{}
   }
-
-  // Auto-subscribe to mapped notifies (if present)
+  // Auto-sub Temp + Setpoint notifies
   try{
-    const chT = getCharByUUID(mapTempN.value.trim());
+    const chT = getCharByUUID(charTempN.value.trim());
     await subscribeIf(chT, dv=>{
       if(dv.byteLength>=2){
         const t = new DataView(dv.buffer).getInt16(0,true)/10;
-        if(isFinite(t)) curTempEl.textContent = t.toFixed(1);
+        if(isFinite(t)) curTemp.textContent = t.toFixed(1);
       }
       log(`[temp] ${hex(new Uint8Array(dv.buffer))}`);
     });
-  }catch(e){ log('Temp notify subscribe failed: '+e); }
-
+  }catch(e){ log('temp notify sub failed: '+e); }
   try{
-    const chS = getCharByUUID(mapSpN.value.trim());
+    const chS = getCharByUUID(charSpN.value.trim());
     await subscribeIf(chS, dv=>{
       if(dv.byteLength>=2){
-        const s = new DataView(dv.buffer).getInt16(0,true);
-        if(isFinite(s)) spEl.textContent = s;
+        const s=new DataView(dv.buffer).getInt16(0,true);
+        if(isFinite(s)) spEl.textContent=s;
       }
       log(`[setpoint] ${hex(new Uint8Array(dv.buffer))}`);
     });
-  }catch(e){ log('Setpoint notify subscribe failed: '+e); }
-
-  // Status stream if in map
-  try{
-    const chSt = getCharByUUID("00000003-1989-0108-1234-123456789ABC");
-    await subscribeIf(chSt, dv=> log(`[status] ${hex(new Uint8Array(dv.buffer))}`));
-  }catch{}
+  }catch(e){ log('setpoint notify sub failed: '+e); }
 
   discovered=true;
-  log("Discovery complete.");
+  log('Discovery complete.');
 }
 
-/* ===== Connect variants ===== */
-async function connectBroad(){
-  if(!navigator.bluetooth){ alert('Use Bluefy/WebBLE on iPhone.'); return; }
-  setStatus('Scanning…');
-  device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
-  await finishConnect();
-}
-async function connectByName(){
-  const p=namePrefixEl.value.trim()||"VOLCANO";
-  if(!navigator.bluetooth){ alert('Use Bluefy/WebBLE on iPhone.'); return; }
-  setStatus('Scanning…');
-  device = await navigator.bluetooth.requestDevice({ filters:[{ namePrefix:p }], optionalServices:[mapSvcCtrl.value.trim(), mapSvcTemp.value.trim()] });
-  await finishConnect();
-}
-async function connectByService(){
-  const svc = svcInputEl.value.trim();
-  if(!svc){ alert('Enter a service UUID.'); return; }
-  if(!navigator.bluetooth){ alert('Use Bluefy/WebBLE on iPhone.'); return; }
-  setStatus('Scanning…');
-  device = await navigator.bluetooth.requestDevice({ filters:[{ services:[svc] }], optionalServices:[svc, mapSvcCtrl.value.trim(), mapSvcTemp.value.trim()] });
-  await finishConnect();
-}
-async function reconnectWithOptional(){
-  if(!navigator.bluetooth){ alert('Use Bluefy/WebBLE on iPhone.'); return; }
-  // Aggressive optionalServices list to unlock access on Bluefy/Chrome
-  const opts = [
-    "0000180a-0000-1000-8000-00805f9b34fb", // Device Info
-    "0000180f-0000-1000-8000-00805f9b34fb", // Battery
-    mapSvcCtrl.value.trim(),
-    mapSvcTemp.value.trim(),
-    "10100000-5354-4F52-5A26-4249434B454C",
-    "10130000-5354-4F52-5A26-4249434B454C",
-    "01000002-1989-0108-1234-123456789ABC"
-  ];
-  setStatus('Scanning (optionalServices)…');
-  device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: opts });
-  await finishConnect();
-}
-
-async function finishConnect(){
-  devNameEl.textContent = device.name || device.id || 'Volcano';
-  setStatus('Connecting…');
-  server = await device.gatt.connect();
-  setStatus('Connected');
-  await discoverAll();
-  setStatus('Ready');
-}
-
-/* ===== Actions ===== */
+/* -------- actions -------- */
 async function setTemp(){
   try{
     if(!discovered) await discoverAll();
     const c = clamp(inpSet.value);
     spEl.textContent = c;
-    const ch = getCharByUUID(mapSpW.value.trim());
-    try{ await ch.writeValueWithoutResponse(toTenths2(c)); }
-    catch{ await ch.writeValueWithoutResponse(toTenths4(c)); }
+    const ch = getCharByUUID(charSpW.value.trim());
+    try{ await writeSmart(ch, toTenths2(c)); }
+    catch{ await writeSmart(ch, toTenths4(c)); }
     log(`→ setpoint write ${c} °C`);
   }catch(e){ log('Set temp error: '+e); alert('Set temp failed: '+e); }
 }
 
-async function probeAllToggles(){
+/* try multiple payload variants for toggles */
+const PRESS_VARIANTS = [
+  new Uint8Array([0x01]),
+  new Uint8Array([0x01,0x00]),
+  new Uint8Array([0x01,0x00,0x00,0x00]),
+];
+const RELEASE_VARIANTS = [
+  new Uint8Array([0x00]),
+  new Uint8Array([0x00,0x00]),
+  new Uint8Array([0x00,0x00,0x00,0x00]),
+];
+
+async function pulseUUID(uuid,label){
+  try{
+    const ch = getCharByUUID(uuid);
+    // try all variants until one doesn't throw
+    let ok=false;
+    for(let i=0;i<PRESS_VARIANTS.length && !ok;i++){
+      try{
+        await writeSmart(ch, PRESS_VARIANTS[i]);
+        await new Promise(r=>setTimeout(r,150));
+        await writeSmart(ch, RELEASE_VARIANTS[i]);
+        ok=true;
+        log(`→ ${label} pulse sent (${uuid}) using variant ${i+1}`);
+      }catch(_){ /* try next */ }
+    }
+    if(!ok) throw new Error('all payload variants failed');
+  }catch(e){ log(`${label} error: ${e}`); alert(`${label} failed: ${e}`); }
+}
+
+async function toggleHeater(){ await pulseUUID(charHeater.value.trim(),'heater'); }
+async function toggleFan(){ await pulseUUID(charFan.value.trim(),'fan'); }
+
+/* brute probe known families to find a working toggle, store in mapping */
+const PROBE_CANDIDATES = [
+  "1011000F-5354-4F52-5A26-4249434B454C",
+  "1011000C-5354-4F52-5A26-4249434B454C",
+  "1010000C-5354-4F52-5A26-4249434B454C",
+  "1010000D-5354-4F52-5A26-4249434B454C",
+  "10130001-5354-4F52-5A26-4249434B454C",
+  "10130002-5354-4F52-5A26-4249434B454C",
+  "10130003-5354-4F52-5A26-4249434B454C",
+  "10130004-5354-4F52-5A26-4249434B454C",
+  "10130005-5354-4F52-5A26-4249434B454C",
+  "10130006-5354-4F52-5A26-4249434B454C",
+  "10130007-5354-4F52-5A26-4249434B454C",
+  "10130008-5354-4F52-5A26-4249434B454C",
+  "10130009-5354-4F52-5A26-4249434B454C",
+  "1013000A-5354-4F52-5A26-4249434B454C",
+  "1013000B-5354-4F52-5A26-4249434B454C",
+  "101300FF-5354-4F52-5A26-4249434B454C"
+];
+
+async function probeToggles(){
   if(!discovered) await discoverAll();
-  let foundH = "", foundF = "";
-  for(const u of CANDIDATE_TOGGLES){
+  const worked=[];
+  for(const u of PROBE_CANDIDATES){
     try{
       const ch = getCharByUUID(u);
-      await ch.writeValueWithoutResponse(new Uint8Array([0x01]));
-      await new Promise(r=>setTimeout(r,400));
-      await ch.writeValueWithoutResponse(new Uint8Array([0x00]));
-      log(`  toggle candidate reacted? ${u} (check device)`);
-      if(!foundH) foundH = u; else if(!foundF && u!==foundH) foundF=u;
+      for(let i=0;i<PRESS_VARIANTS.length;i++){
+        try{
+          await writeSmart(ch, PRESS_VARIANTS[i]);
+          await new Promise(r=>setTimeout(r,180));
+          await writeSmart(ch, RELEASE_VARIANTS[i]);
+          log(`[probe] pulse OK on ${u} (variant ${i+1})`);
+          worked.push([u,i+1]);
+          break;
+        }catch{}
+      }
     }catch{}
   }
-  if(foundH){ mapHeater.value = foundH; heaterUUID = foundH; localStorage.setItem('heaterUUID',foundH); }
-  if(foundF){ mapFan.value    = foundF; fanUUID    = foundF; localStorage.setItem('fanUUID',foundF); }
-  saveMap();
-  alert(`Probing done.\nHeater: ${mapHeater.value||'—'}\nFan: ${mapFan.value||'—'}`);
+  if(worked.length){
+    // heuristically assign first two to heater/fan if user hasn't set them
+    if(!charHeater.value && worked[0]) charHeater.value = worked[0][0];
+    if(!charFan.value && worked[1])    charFan.value    = worked[1][0];
+    alert(`Probe done. Found ${worked.length} candidates. Check which ones actually moved the device and set Heater/Fan fields, then Save.`);
+  }else{
+    alert('Probe complete: no obvious toggle responded. Try Monitor and press physical buttons.');
+  }
 }
 
-async function pulse(which){
+/* monitor: subscribe to every notify to watch which UUIDs fire when pressing device buttons */
+async function monitorAll(){
   if(!discovered) await discoverAll();
-  const u = (which==='heater'? mapHeater.value.trim() : mapFan.value.trim());
-  if(!u){ alert(`Set ${which} UUID in Mapping or press Probe All Toggles`); return; }
-  try{
-    const ch = getCharByUUID(u);
-    await ch.writeValueWithoutResponse(new Uint8Array([0x01]));
-    await new Promise(r=>setTimeout(r,150));
-    await ch.writeValueWithoutResponse(new Uint8Array([0x00]));
-    log(`→ ${which} pulse sent (${u})`);
-  }catch(e){ log(`${which} error: ${e}`); alert(`${which} failed: ${e}`); }
+  for (const [key,ch] of chars.entries()){
+    try{
+      if (ch.properties.notify || ch.properties.indicate){
+        await ch.startNotifications();
+        ch.addEventListener('characteristicvaluechanged', e=>{
+          const uuid = key.split('|')[1];
+          const arr = new Uint8Array(e.target.value.buffer);
+          log(`[notify] ${uuid} = ${hex(arr)}`);
+        });
+      }
+    }catch{}
+  }
+  alert('Monitoring all notifies. Press Fan/Heater on the Volcano and watch Logs for the UUIDs that change.');
 }
 
-/* ===== Raw GATT tools ===== */
-async function rawRead(){
-  try{
-    const ch = getCharByUUID(rawChar.value.trim());
-    const v = await ch.readValue();
-    const arr = new Uint8Array(v.buffer);
-    log(`[raw read] ${rawChar.value.trim()} = [${hex(arr)}]`);
-  }catch(e){ log('raw read error: '+e); alert(e); }
+/* -------- mapping save/clear -------- */
+function saveMap(){
+  const m={
+    svcTemp: svcTemp.value.trim(),
+    charTempN: charTempN.value.trim(),
+    charSpN: charSpN.value.trim(),
+    charSpW: charSpW.value.trim(),
+    charHeater: charHeater.value.trim(),
+    charFan: charFan.value.trim()
+  };
+  localStorage.setItem('volcanoMap', JSON.stringify(m));
+  log('Saved mapping.');
 }
-async function rawNotify(){
+function loadMap(){
   try{
-    const ch = getCharByUUID(rawChar.value.trim());
-    await subscribeIf(ch, dv => log(`[raw notify] ${rawChar.value.trim()} = [${hex(new Uint8Array(dv.buffer))}]`));
-    log(`[raw notify] subscribed to ${rawChar.value.trim()}`);
-  }catch(e){ log('raw notify error: '+e); alert(e); }
+    const m=JSON.parse(localStorage.getItem('volcanoMap')||'{}');
+    if(m.svcTemp)  svcTemp.value=m.svcTemp;
+    if(m.charTempN)charTempN.value=m.charTempN;
+    if(m.charSpN)  charSpN.value=m.charSpN;
+    if(m.charSpW)  charSpW.value=m.charSpW;
+    if(m.charHeater)charHeater.value=m.charHeater;
+    if(m.charFan)  charFan.value=m.charFan;
+  }catch{}
 }
-async function rawWrite(){
-  try{
-    const ch = getCharByUUID(rawChar.value.trim());
-    const payload = parseHex(rawHex.value);
-    await ch.writeValueWithoutResponse(payload);
-    log(`[raw write] ${rawChar.value.trim()} <= [${hex(payload)}]`);
-  }catch(e){ log('raw write error: '+e); alert(e); }
-}
+loadMap();
 
-/* ===== Wire UI ===== */
-document.getElementById('btnBroad').onclick = connectBroad;
-document.getElementById('btnByName').onclick = connectByName;
-document.getElementById('btnByService').onclick = connectByService;
-document.getElementById('btnWithOptional').onclick = reconnectWithOptional;
-
-document.getElementById('btnDiscover').onclick = async ()=>{
-  if(!server){ alert('Connect first.'); return; }
-  await discoverAll();
-};
-
-document.getElementById('btnSaveMap').onclick = saveMap;
-document.getElementById('btnClearMap').onclick = ()=>{ localStorage.removeItem('volcanoMap'); localStorage.removeItem('heaterUUID'); localStorage.removeItem('fanUUID'); loadMap(); log('Mapping cleared.'); };
-
+/* -------- wire UI -------- */
+document.getElementById('btnConnect').onclick = connect;
+document.getElementById('btnDiscover').onclick = async ()=>{ if(!server){alert('Connect first.');return;} await discoverAll(); };
 document.getElementById('btnSet').onclick = setTemp;
-document.getElementById('btnHeater').onclick = ()=>pulse('heater');
-document.getElementById('btnFan').onclick    = ()=>pulse('fan');
-document.getElementById('btnProbeToggles').onclick = probeAllToggles;
-
-document.getElementById('btnRawRead').onclick = rawRead;
-document.getElementById('btnRawNotify').onclick = rawNotify;
-document.getElementById('btnRawWrite').onclick = rawWrite;
-
-for (const btn of document.querySelectorAll('[data-preset]')){
-  btn.addEventListener('click', async ()=>{
-    for (const s of btn.dataset.preset.split(',')){
-      inpSet.value = parseInt(s,10);
-      await setTemp();
-      await new Promise(r=>setTimeout(r, 60000));
-    }
-  });
-}
+document.getElementById('btnHeater').onclick = toggleHeater;
+document.getElementById('btnFan').onclick    = toggleFan;
+document.getElementById('btnProbe').onclick  = probeToggles;
+document.getElementById('btnMonitor').onclick= monitorAll;
+document.getElementById('btnSaveMap').onclick= saveMap;
+document.getElementById('btnClearMap').onclick=()=>{ localStorage.removeItem('volcanoMap'); location.reload(); };
 </script>
 </body>
 </html>
