@@ -1,1 +1,231 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Volcano Hybrid • Web Controller</title>
+<meta name="theme-color" content="#0b0b0c">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box} body{margin:0;background:#0b0b0c;color:#eaeaea;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+h1{letter-spacing:.08em;margin:10px 0 14px}
+.card{background:#101115;border:1px solid #1c1c21;border-radius:14px;padding:14px;margin:10px 0}
+.row{margin:6px 0} .small{opacity:.85}
+button{background:#1c1c1f;color:#eaeaea;border:1px solid #2d2d32;padding:10px 14px;border-radius:12px;margin:6px;cursor:pointer}
+button:hover{background:#232327}
+input[type=number]{width:140px;padding:8px;border-radius:10px;border:1px solid #2d2d32;background:#0f0f12;color:#eaeaea;margin:6px}
+pre{background:#0f0f12;border:1px solid #2d2d32;border-radius:10px;padding:10px;max-height:320px;overflow:auto;font-size:12px}
+.grid{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>VOLCANO HYBRID • Web Controller</h1>
 
+  <div class="card">
+    <div class="small">iPhone: use <b>Bluefy/WebBLE</b> (Safari doesn’t support Web Bluetooth). Close the official S&B app first.</div>
+    <div class="row">Status: <span id="status">Idle</span></div>
+    <button id="btnConnect">Connect</button>
+    <div class="row">Device: <span id="devName">—</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Readouts</h3>
+    <div class="row">Current temp: <b><span id="curTemp">—</span> °C</b></div>
+    <div class="row">Setpoint: <b><span id="sp">—</span> °C</b></div>
+  </div>
+
+  <div class="card">
+    <h3>Controls</h3>
+    <div class="grid">
+      <input type="number" id="inpSet" min="150" max="225" value="190">
+      <button id="btnSet">Set Temp</button>
+      <button id="btnHeater">Heater On/Off</button>
+      <button id="btnFan">Fan On/Off</button>
+    </div>
+    <div class="grid">
+      <button data-preset="175,190,205">Terp Flight</button>
+      <button data-preset="185,195,205">Balanced</button>
+      <button data-preset="190,205,215">Medical</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Logs</h3>
+    <pre id="log"></pre>
+  </div>
+</div>
+
+<script>
+/* ===== UUIDs from your scans ===== */
+const SERVICE_CTRL         = "00000001-1989-0108-1234-123456789ABC";
+const CHAR_WRITE_CMD       = "00000002-1989-0108-1234-123456789ABC";  // write/wr-noresp
+const CHAR_STATUS_NOTIFY   = "00000003-1989-0108-1234-123456789ABC";  // read/notify
+
+const SERVICE_TEMP         = "10110000-5354-4F52-5A26-4249434B454C";
+const CHAR_CUR_TEMP_NOTIFY = "10110001-5354-4F52-5A26-4249434B454C";  // int16 LE, tenths °C
+const CHAR_SETPOINT_WRITE  = "1011000D-5354-4F52-5A26-4249434B454C";  // int16 LE, tenths °C (2 or 4 bytes)
+const CHAR_SETPOINT_NOTIFY = "1011000E-5354-4F52-5A26-4249434B454C";  // often int16 LE, whole °C
+
+// Candidates for heater/fan (we’ll probe and remember)
+const CANDIDATE_TOGGLES = [
+  "1011000F-5354-4F52-5A26-4249434B454C",
+  "1011000C-5354-4F52-5A26-4249434B454C",
+  "1010000C-5354-4F52-5A26-4249434B454C",
+  "1010000D-5354-4F52-5A26-4249434B454C",
+];
+
+const statusEl = document.getElementById('status');
+const devName  = document.getElementById('devName');
+const logEl    = document.getElementById('log');
+const curTemp  = document.getElementById('curTemp');
+const spEl     = document.getElementById('sp');
+const inpSet   = document.getElementById('inpSet');
+
+let device, server;
+let heaterUUID = localStorage.getItem('heaterUUID') || null;
+let fanUUID    = localStorage.getItem('fanUUID') || null;
+
+const MIN=150, MAX=225;
+
+function log(s){ console.log(s); logEl.textContent = (s+"\n"+logEl.textContent).slice(0,40000); }
+function setStatus(s){ statusEl.textContent = s; }
+
+function toTenthsLEBytes(c){
+  const t = Math.round(c*10);
+  const b = new ArrayBuffer(2);
+  new DataView(b).setUint16(0, t, true);
+  return new Uint8Array(b);
+}
+function toTenthsLE4(c){
+  const t = Math.round(c*10);
+  const b = new ArrayBuffer(4);
+  new DataView(b).setUint32(0, t, true);
+  return new Uint8Array(b);
+}
+function bytesToHex(u8){ return Array.from(u8).map(b=>b.toString(16).padStart(2,'0')).join(' '); }
+
+async function connect(){
+  try{
+    if(!navigator.bluetooth){ alert("Use Bluefy/WebBLE on iPhone."); return; }
+    setStatus('Scanning…');
+    device = await navigator.bluetooth.requestDevice({
+      filters:[{ namePrefix:'VOLCANO' }],
+      optionalServices:[SERVICE_CTRL, SERVICE_TEMP]
+    });
+    devName.textContent = device.name || device.id || 'Volcano';
+    setStatus('Connecting…');
+    server = await device.gatt.connect();
+    setStatus('Connected');
+
+    // Subscribe to status/temps
+    await subscribeNotify(CHAR_STATUS_NOTIFY, data => log(`[status] ${bytesToHex(new Uint8Array(data.buffer))}`));
+    await subscribeNotify(CHAR_CUR_TEMP_NOTIFY, data => {
+      const dv = new DataView(data.buffer);
+      let t = NaN;
+      if (dv.byteLength>=2){ t = dv.getInt16(0,true)/10; }
+      if (isFinite(t)) curTemp.textContent = t.toFixed(1);
+      log(`[temp] ${bytesToHex(new Uint8Array(data.buffer))}`);
+    });
+    await subscribeNotify(CHAR_SETPOINT_NOTIFY, data => {
+      const dv = new DataView(data.buffer);
+      let s = NaN;
+      if (dv.byteLength>=2){ s = dv.getInt16(0,true); }
+      if (isFinite(s)) spEl.textContent = s;
+      log(`[setpoint] ${bytesToHex(new Uint8Array(data.buffer))}`);
+    });
+
+    log('Ready. Try setting temp or toggling heater/fan.');
+  }catch(e){
+    setStatus('Connect failed'); log('connect error: '+e);
+    alert(e);
+  }
+}
+
+async function getChar(uuid){
+  // Find which service it belongs to:
+  const svcUUID = [SERVICE_CTRL, SERVICE_TEMP].find(s => uuid.startsWith(s.split('-')[0].slice(0,4)) ) || null;
+  // We can fetch directly by UUID from server:
+  return await server.getPrimaryService(uuid.startsWith('1011')?SERVICE_TEMP:SERVICE_CTRL)
+                     .then(svc=>svc.getCharacteristic(uuid));
+}
+
+async function subscribeNotify(charUUID, cb){
+  try{
+    const ch = await getChar(charUUID);
+    await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged', e => cb(e.target.value));
+  }catch(e){ log(`notify ${charUUID} failed: ${e}`); }
+}
+
+async function setTemp(){
+  try{
+    let c = Math.max(MIN, Math.min(MAX, Number(inpSet.value)||0));
+    spEl.textContent = c;
+    // Try 2-byte
+    try{
+      const ch = await getChar(CHAR_SETPOINT_WRITE);
+      await ch.writeValueWithoutResponse(toTenthsLEBytes(c));
+    }catch(_){
+      // Fallback: 4-byte
+      const ch = await getChar(CHAR_SETPOINT_WRITE);
+      await ch.writeValueWithoutResponse(toTenthsLE4(c));
+    }
+    log(`→ setpoint write ${c} °C`);
+  }catch(e){ log('set temp error: '+e); alert('Set temp failed: '+e); }
+}
+
+async function probeToggle(label){
+  for (const u of CANDIDATE_TOGGLES){
+    try{
+      const ch = await getChar(u);
+      await ch.writeValueWithoutResponse(new Uint8Array([0x01]));
+      await new Promise(r=>setTimeout(r, 500));
+      await ch.writeValueWithoutResponse(new Uint8Array([0x00]));
+      log(`  ${label} tentative: ${u}`);
+      return u;
+    }catch(e){
+      // keep trying
+    }
+  }
+  alert(`Couldn't find a working ${label} characteristic.\nTry toggling heater/fan on the device and watch which UUID notifies, then add it here.`);
+  return null;
+}
+
+async function toggle(label){
+  const key = label==='heater' ? 'heaterUUID' : 'fanUUID';
+  let cached = label==='heater' ? heaterUUID : fanUUID;
+  if(!cached){
+    cached = await probeToggle(label);
+    if(!cached) return;
+    if(label==='heater'){ heaterUUID = cached; } else { fanUUID = cached; }
+    localStorage.setItem(key, cached);
+  }
+  try{
+    const ch = await getChar(cached);
+    // simple flip: write 01 then 00 quickly (acts like press)
+    await ch.writeValueWithoutResponse(new Uint8Array([0x01]));
+    await new Promise(r=>setTimeout(r, 150));
+    await ch.writeValueWithoutResponse(new Uint8Array([0x00]));
+    log(`→ ${label} pulse sent (${cached})`);
+  }catch(e){ log(`${label} error: ${e}`); alert(`${label} failed: ${e}`); }
+}
+
+/* UI wires */
+document.getElementById('btnConnect').onclick = connect;
+document.getElementById('btnSet').onclick = setTemp;
+document.getElementById('btnHeater').onclick = ()=>toggle('heater');
+document.getElementById('btnFan').onclick    = ()=>toggle('fan');
+for (const btn of document.querySelectorAll('[data-preset]')){
+  btn.addEventListener('click', async ()=>{
+    for (const s of btn.dataset.preset.split(',')){
+      inpSet.value = parseInt(s,10);
+      await setTemp();
+      await new Promise(r=>setTimeout(r, 60000));
+    }
+  });
+}
+</script>
+</body>
+</html>
