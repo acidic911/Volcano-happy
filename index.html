@@ -1,10 +1,10 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Volcano Hybrid • Web Controller</title>
-<meta name="theme-color" content="#0b0b0c" />
+<meta name="theme-color" content="#0b0b0c">
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -16,7 +16,7 @@ h1{letter-spacing:.08em;margin:10px 0 14px}
 button{background:#1c1c1f;color:#eaeaea;border:1px solid #2d2d32;padding:10px 14px;border-radius:12px;margin:6px;cursor:pointer}
 button:hover{background:#232327}
 input[type=number]{width:140px;padding:8px;border-radius:10px;border:1px solid #2d2d32;background:#0f0f12;color:#eaeaea;margin:6px}
-pre{background:#0f0f12;border:1px solid #2d2d32;border-radius:10px;padding:10px;max-height:320px;overflow:auto;font-size:12px}
+pre{background:#0f0f12;border:1px solid #2d2d32;border-radius:10px;padding:10px;max-height:340px;overflow:auto;font-size:12px}
 .grid{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 </style>
 </head>
@@ -60,15 +60,15 @@ pre{background:#0f0f12;border:1px solid #2d2d32;border-radius:10px;padding:10px;
 </div>
 
 <script>
-/* ========= UUIDs from your scans ========= */
+/* ===== UUIDs from your scans ===== */
 const SERVICE_CTRL         = "00000001-1989-0108-1234-123456789ABC";
-const CHAR_WRITE_CMD       = "00000002-1989-0108-1234-123456789ABC";  // write / writeWithoutResponse
-const CHAR_STATUS_NOTIFY   = "00000003-1989-0108-1234-123456789ABC";  // read/notify
+const CHAR_WRITE_CMD       = "00000002-1989-0108-1234-123456789ABC";   // (not used yet, kept for reference)
+const CHAR_STATUS_NOTIFY   = "00000003-1989-0108-1234-123456789ABC";
 
 const SERVICE_TEMP         = "10110000-5354-4F52-5A26-4249434B454C";
-const CHAR_CUR_TEMP_NOTIFY = "10110001-5354-4F52-5A26-4249434B454C";  // notify: int16 LE, tenths °C
-const CHAR_SETPOINT_WRITE  = "1011000D-5354-4F52-5A26-4249434B454C";  // write: int16 LE tenths °C (2 or 4 bytes)
-const CHAR_SETPOINT_NOTIFY = "1011000E-5354-4F52-5A26-4249434B454C";  // notify: often int16 LE whole °C
+const CHAR_CUR_TEMP_NOTIFY = "10110001-5354-4F52-5A26-4249434B454C";   // int16 LE, tenths °C
+const CHAR_SETPOINT_WRITE  = "1011000D-5354-4F52-5A26-4249434B454C";   // int16 LE, tenths °C (2 or 4 bytes)
+const CHAR_SETPOINT_NOTIFY = "1011000E-5354-4F52-5A26-4249434B454C";   // int16 LE, whole °C (often)
 
 /* Candidates for heater/fan — we’ll probe once and remember */
 const CANDIDATE_TOGGLES = [
@@ -78,7 +78,7 @@ const CANDIDATE_TOGGLES = [
   "1010000D-5354-4F52-5A26-4249434B454C",
 ];
 
-/* ========= UI refs ========= */
+/* ===== UI refs ===== */
 const statusEl=document.getElementById('status');
 const devName=document.getElementById('devName');
 const logEl=document.getElementById('log');
@@ -86,24 +86,24 @@ const curTempEl=document.getElementById('curTemp');
 const spEl=document.getElementById('sp');
 const inpSet=document.getElementById('inpSet');
 
-/* ========= State ========= */
+/* ===== State ===== */
 let device, server;
-let chars = new Map(); // key: "service|char" -> BluetoothRemoteGATTCharacteristic
+let chars = new Map();                 // cache: "service|char" -> characteristic
 let discovered = false;
 let heaterUUID = localStorage.getItem('heaterUUID') || null;
 let fanUUID    = localStorage.getItem('fanUUID')    || null;
 
 const MIN=150, MAX=225;
 
-/* ========= Helpers ========= */
+/* ===== Helpers ===== */
 function log(s){ console.log(s); logEl.textContent = (s+"\n"+logEl.textContent).slice(0, 60000); }
 function setStatus(s){ statusEl.textContent = s; }
+function clamp(v){ v=Number(v)||0; return Math.max(MIN, Math.min(MAX, Math.round(v))); }
 function toTenthsLE2(c){ const t=Math.round(c*10); const b=new ArrayBuffer(2); new DataView(b).setUint16(0,t,true); return new Uint8Array(b); }
 function toTenthsLE4(c){ const t=Math.round(c*10); const b=new ArrayBuffer(4); new DataView(b).setUint32(0,t,true); return new Uint8Array(b); }
 function hex(u8){ return Array.from(u8).map(b=>b.toString(16).padStart(2,'0')).join(' '); }
-function clamp(v){ v=Number(v)||0; return Math.max(MIN, Math.min(MAX, Math.round(v))); }
 
-/* Find a cached characteristic by its UUID (no service guessing) */
+/* ===== Cache lookup: never guess service, use discovered map ===== */
 function getCharByUUID(charUUID){
   for(const [key, ch] of chars.entries()){
     if(key.endsWith('|'+charUUID)) return ch;
@@ -111,17 +111,17 @@ function getCharByUUID(charUUID){
   throw new Error('Characteristic not found: '+charUUID);
 }
 
-/* Subscribe helper (only if notify supported) */
+/* ===== Subscribe helper ===== */
 async function subscribeIf(ch, onValue){
   try{
-    if(ch && ch.properties && (ch.properties.notify || ch.properties.indicate)){
+    if(ch && (ch.properties.notify || ch.properties.indicate)){
       await ch.startNotifications();
       ch.addEventListener('characteristicvaluechanged', e => onValue(e.target.value));
     }
   }catch(e){ log('subscribe failed: '+e); }
 }
 
-/* Full discovery: cache ALL services/chars once after connect */
+/* ===== Full discovery & auto-subscribe to key notifies ===== */
 async function discoverAll(){
   chars.clear(); discovered=false;
   const services = await server.getPrimaryServices();
@@ -137,12 +137,19 @@ async function discoverAll(){
           notify:!!ch.properties.notify
         })}`);
 
-        // Auto-subscribe to the three key notifies if present
+        // One-shot READ (like your working logs)
+        if (ch.properties.read){
+          try{
+            const v = await ch.readValue();
+            log(`READ ${key} = [${Array.from(new Uint8Array(v.buffer)).join(', ')}]`);
+          }catch{}
+        }
+
+        // Auto-subscribe to known notifies
         if (ch.uuid === CHAR_CUR_TEMP_NOTIFY){
           await subscribeIf(ch, dv=>{
-            const v = new DataView(dv.buffer);
-            if (v.byteLength>=2){
-              const t = v.getInt16(0,true)/10;
+            if (dv.byteLength>=2){
+              const t = new DataView(dv.buffer).getInt16(0,true)/10;
               if (isFinite(t)) curTempEl.textContent = t.toFixed(1);
             }
             log(`[temp] ${hex(new Uint8Array(dv.buffer))}`);
@@ -150,9 +157,8 @@ async function discoverAll(){
         }
         if (ch.uuid === CHAR_SETPOINT_NOTIFY){
           await subscribeIf(ch, dv=>{
-            const v = new DataView(dv.buffer);
-            if (v.byteLength>=2){
-              const s = v.getInt16(0,true);
+            if (dv.byteLength>=2){
+              const s = new DataView(dv.buffer).getInt16(0,true);
               if (isFinite(s)) spEl.textContent = s;
             }
             log(`[setpoint] ${hex(new Uint8Array(dv.buffer))}`);
@@ -170,11 +176,11 @@ async function discoverAll(){
   log('Discovery complete.');
 }
 
-/* ========= Actions ========= */
+/* ===== Actions ===== */
 async function setTemp(){
   try{
     if(!discovered) await discoverAll();
-    let c = clamp(inpSet.value);
+    const c = clamp(inpSet.value);
     spEl.textContent = c;
     const ch = getCharByUUID(CHAR_SETPOINT_WRITE);
     try{
@@ -186,7 +192,7 @@ async function setTemp(){
   }catch(e){ log('Set temp error: '+e); alert('Set temp failed: '+e); }
 }
 
-async function probeToggle(label){
+async function probeToggle(which){
   if(!discovered) await discoverAll();
   for (const u of CANDIDATE_TOGGLES){
     try{
@@ -194,11 +200,11 @@ async function probeToggle(label){
       await ch.writeValueWithoutResponse(new Uint8Array([0x01]));
       await new Promise(r=>setTimeout(r,500));
       await ch.writeValueWithoutResponse(new Uint8Array([0x00]));
-      log(`  ${label} tentative: ${u}`);
+      log(`  ${which} tentative: ${u}`);
       return u;
     }catch(e){ /* try next */ }
   }
-  alert(`Couldn't find a working ${label} characteristic.\nCheck logs while toggling on the device to identify the right UUID.`);
+  alert(`Couldn't find a working ${which} characteristic.\nToggle it on the device and watch which UUID notifies, then add that UUID here.`);
   return null;
 }
 
@@ -220,10 +226,10 @@ async function pulseToggle(which){
   }catch(e){ log(`${which} error: ${e}`); alert(`${which} failed: ${e}`); }
 }
 
-/* ========= Connect & wire UI ========= */
+/* ===== Connect & UI wires (keeps your original feel) ===== */
 async function connect(){
   try{
-    if(!navigator.bluetooth){ alert('Use Bluefy/WebBLE on iPhone.'); return; }
+    if(!navigator.bluetooth){ alert("Use Bluefy/WebBLE on iPhone."); return; }
     setStatus('Scanning…');
     device = await navigator.bluetooth.requestDevice({
       filters:[{ namePrefix:'VOLCANO' }],
@@ -233,6 +239,8 @@ async function connect(){
     setStatus('Connecting…');
     server = await device.gatt.connect();
     setStatus('Connected');
+
+    // Enumerate immediately (like your working version), but now we cache + subscribe
     await discoverAll();
     setStatus('Ready');
   }catch(e){
@@ -255,7 +263,7 @@ for (const btn of document.querySelectorAll('[data-preset]')){
     for (const s of btn.dataset.preset.split(',')){
       inpSet.value = parseInt(s,10);
       await setTemp();
-      await new Promise(r=>setTimeout(r, 60000)); // ~1 minute per step; tweak as you like
+      await new Promise(r=>setTimeout(r, 60000)); // ~1 min per step
     }
   });
 }
