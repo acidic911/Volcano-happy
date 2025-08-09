@@ -1,0 +1,221 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Volcano • iPhone Web Controller</title>
+<meta name="theme-color" content="#0b0b0c">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#0b0b0c;color:#eaeaea;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+.wrap{max-width:820px;margin:0 auto;padding:16px}
+h1{letter-spacing:.08em;margin:10px 0 14px}
+.card{background:#101115;border:1px solid #1c1c21;border-radius:14px;padding:14px;margin:10px 0}
+.row{margin:6px 0}
+button{background:#1c1c1f;color:#eaeaea;border:1px solid #2d2d32;padding:10px 14px;border-radius:12px;margin:6px;cursor:pointer}
+button:hover{background:#232327}
+input[type=number],input[type=text]{width:140px;padding:8px;border-radius:10px;border:1px solid #2d2d32;background:#0f0f12;color:#eaeaea;margin:6px}
+.flex{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:flex;flex-wrap:wrap;gap:8px}
+pre{background:#0f0f12;border:1px solid #2d2d32;border-radius:10px;padding:10px;max-height:260px;overflow:auto;font-size:12px}
+.small{opacity:.8;font-size:.9em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>VOLCANO • iPhone Web</h1>
+
+  <div class="card">
+    <button id="btnConnect">Connect</button>
+    <div class="row">Device: <span id="devName">—</span></div>
+    <div class="row">Temp: <span id="curTemp">—</span> °C</div>
+    <div class="row">Setpoint: <span id="sp">—</span> °C</div>
+    <div class="flex">
+      <input type="number" id="inpSet" min="150" max="225" value="190">
+      <button id="btnSet">Set Temp</button>
+      <button id="btnHeater">Heater On/Off</button>
+      <button id="btnFan">Fan On/Off</button>
+    </div>
+    <div class="grid">
+      <button data-preset="175,190,205">Terp Flight</button>
+      <button data-preset="185,195,205">Balanced</button>
+      <button data-preset="190,205,215">Medical</button>
+      <button data-preset="185">Microdose</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row"><b>First time only:</b> tap <em>Discover</em>, watch logs, then paste UUIDs below (saved automatically).</div>
+    <div class="flex"><button id="btnDiscover">Discover (print services/chars)</button></div>
+    <div class="grid">
+      <label>Service<br><input id="svc" type="text" placeholder="service-uuid"></label>
+      <label>Temp (notify)<br><input id="cTemp" type="text" placeholder="char-uuid"></label>
+      <label>Setpoint Read (notify)<br><input id="cSpR" type="text" placeholder="char-uuid"></label>
+      <label>Setpoint Write (write)<br><input id="cSpW" type="text" placeholder="char-uuid"></label>
+      <label>Heater Cmd (write)<br><input id="cHeat" type="text" placeholder="char-uuid"></label>
+      <label>Fan Cmd (write)<br><input id="cFan" type="text" placeholder="char-uuid"></label>
+    </div>
+    <div class="small">Tip: change temp/heater/fan in the official app and see which characteristic notifies here.</div>
+    <hr>
+    <pre id="log"></pre>
+  </div>
+</div>
+
+<script>
+const logEl = document.getElementById('log');
+const devName = document.getElementById('devName');
+const curTemp = document.getElementById('curTemp');
+const sp = document.getElementById('sp');
+const inpSet = document.getElementById('inpSet');
+
+const svc = document.getElementById('svc');
+const cTemp = document.getElementById('cTemp');
+const cSpR = document.getElementById('cSpR');
+const cSpW = document.getElementById('cSpW');
+const cHeat = document.getElementById('cHeat');
+const cFan  = document.getElementById('cFan');
+
+let device, server;
+let chars = new Map();
+let heaterOn=false, fanOn=false;
+
+const MIN=150, MAX=225;
+
+function saveMap(){
+  const m = {svc:svc.value,cTemp:cTemp.value,cSpR:cSpR.value,cSpW:cSpW.value,cHeat:cHeat.value,cFan:cFan.value};
+  localStorage.setItem('map', JSON.stringify(m));
+}
+function loadMap(){
+  try{
+    const m = JSON.parse(localStorage.getItem('map')||'{}');
+    if(m.svc) svc.value=m.svc;
+    if(m.cTemp) cTemp.value=m.cTemp;
+    if(m.cSpR) cSpR.value=m.cSpR;
+    if(m.cSpW) cSpW.value=m.cSpW;
+    if(m.cHeat) cHeat.value=m.cHeat;
+    if(m.cFan)  cFan.value =m.cFan;
+  }catch{}
+}
+[svc,cTemp,cSpR,cSpW,cHeat,cFan].forEach(i=> i.addEventListener('change', saveMap));
+loadMap();
+
+function log(s){
+  console.log(s);
+  logEl.textContent = (s+"\n"+logEl.textContent).slice(0, 20000);
+}
+function clamp(n){ n=Number(n)||0; return Math.max(MIN, Math.min(MAX, Math.round(n))); }
+function dvFromInt16Tenths(c){
+  const buf = new ArrayBuffer(2);
+  new DataView(buf).setInt16(0, c*10, true);
+  return buf;
+}
+
+async function connect(){
+  try{
+    if(!navigator.bluetooth) return alert("Use Bluefy/WebBLE on iPhone.");
+    device = await navigator.bluetooth.requestDevice({
+      filters:[{namePrefix:"VOLCANO"}],
+      optionalServices:[]
+    });
+    devName.textContent = device.name || device.id || 'Volcano';
+    server = await device.gatt.connect();
+    log("Connected: " + devName.textContent);
+
+    // enumerate services/chars
+    const services = await server.getPrimaryServices();
+    for (const s of services){
+      const chs = await s.getCharacteristics();
+      for (const ch of chs){
+        const key = `${s.uuid}|${ch.uuid}`;
+        chars.set(key, ch);
+        log(`FOUND ${key} props=${JSON.stringify({
+          read:ch.properties.read, write:ch.properties.write||ch.properties.writeWithoutResponse,
+          notify:ch.properties.notify
+        })}`);
+
+        if (ch.properties.read){
+          try{
+            const v = await ch.readValue();
+            log(`READ ${key} = [${[...new Uint8Array(v.buffer)].join(',')}]`);
+          }catch{}
+        }
+        if (ch.properties.notify){
+          try{
+            await ch.startNotifications();
+            ch.addEventListener('characteristicvaluechanged', (e)=>{
+              const dv = e.target.value;
+              const bytes = [...new Uint8Array(dv.buffer)];
+              log(`NOTIFY ${key} = [${bytes.join(',')}]`);
+              if (s.uuid===svc.value && ch.uuid===cTemp.value && dv.byteLength>=2){
+                const t = dv.getInt16(0,true)/10;
+                if (isFinite(t)) curTemp.textContent = t.toFixed(1);
+              }
+              if (s.uuid===svc.value && ch.uuid===cSpR.value && dv.byteLength>=2){
+                const ss = dv.getInt16(0,true)/10|0;
+                sp.textContent = ss;
+              }
+            });
+          }catch{}
+        }
+      }
+    }
+    log('Discovery complete. Paste UUIDs below (saved). Use controls.');
+  }catch(err){ alert("Connect failed: "+err); }
+}
+
+function getChar(uSvc, uChar){
+  const key = `${uSvc}|${uChar}`;
+  const ch = chars.get(key);
+  if(!ch) throw new Error("Characteristic not found: "+key);
+  return ch;
+}
+
+async function setTemp(){
+  const t = clamp(inpSet.value);
+  sp.textContent = t;
+  try{
+    const ch = getChar(svc.value, cSpW.value);
+    await ch.writeValueWithoutResponse(dvFromInt16Tenths(t));
+  }catch(e){ log("Set temp error: "+e); }
+}
+
+async function toggleHeater(){
+  heaterOn = !heaterOn;
+  try{
+    const ch = getChar(svc.value, cHeat.value);
+    await ch.writeValueWithoutResponse(new Uint8Array([heaterOn?1:0]));
+  }catch(e){ log("Heater error: "+e); }
+}
+async function toggleFan(){
+  fanOn = !fanOn;
+  try{
+    const ch = getChar(svc.value, cFan.value);
+    await ch.writeValueWithoutResponse(new Uint8Array([fanOn?1:0]));
+  }catch(e){ log("Fan error: "+e); }
+}
+
+async function runPreset(list){
+  for (const t of list){
+    inpSet.value = t;
+    await setTemp();
+    await new Promise(r=>setTimeout(r, 60000)); // ~1 min per step; tweak to bag fill
+  }
+}
+
+document.getElementById('btnConnect').onclick = connect;
+document.getElementById('btnDiscover').onclick = ()=>{
+  if(!server){ alert("Connect first"); return; }
+  log('Change temp/heater/fan in official app and see which UUIDs notify here.');
+};
+document.getElementById('btnSet').onclick = setTemp;
+document.getElementById('btnHeater').onclick = toggleHeater;
+document.getElementById('btnFan').onclick = toggleFan;
+for (const btn of document.querySelectorAll('[data-preset]')){
+  btn.addEventListener('click', ()=> {
+    const arr = btn.dataset.preset.split(',').map(x=>parseInt(x,10));
+    runPreset(arr);
+  });
+}
+</script>
+</body>
+</html>
