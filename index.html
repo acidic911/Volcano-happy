@@ -1,8 +1,12 @@
 <!doctype html>
-<!-- Volcano Hybrid • Web Controller (Ultra Edition)
-     Everything in one file. Supports iPhone (Bluefy/WebBLE) and Desktop Chrome.
-     Author: you + me
-     License: do what you want; don’t blame us if you melt your balloon :)
+<!-- Volcano Hybrid • Web Controller (Max Edition)
+     - Broad scan + Volcano search + By service + Aggressive optionalServices
+     - Full discovery with table + live search/filter/sort + copy UUIDs
+     - Mapping save/load/import/export
+     - Temp control (2B/4B), Fan/Heater (multi-payload variants), presets
+     - Probe toggles, Monitor all notifies, Raw GATT read/notify/write, Battery, RTT
+     - Stop all notifies, Export logs, Auto reconnect
+     - Use Bluefy/WebBLE on iPhone; close official S&B app first
 -->
 <html lang="en">
 <head>
@@ -14,48 +18,33 @@
 :root{color-scheme:dark}
 *{box-sizing:border-box}
 html,body{height:100%}
-body{
-  margin:0;background:#0b0b0c;color:#eaeaea;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-  line-height:1.35;
-}
-.wrap{max-width:1080px;margin:0 auto;padding:16px}
+body{margin:0;background:#0b0b0c;color:#eaeaea;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.35}
+.wrap{max-width:1160px;margin:0 auto;padding:16px}
 h1{letter-spacing:.08em;margin:10px 0 14px}
 h2,h3{margin:10px 0 8px}
-.card{
-  background:#101115;border:1px solid #1c1c21;border-radius:14px;
-  padding:14px;margin:12px 0; box-shadow:0 0 0 1px rgba(255,255,255,.02) inset;
-}
-.row{margin:6px 0}
-.small{opacity:.85}
+.card{background:#101115;border:1px solid #1c1c21;border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 0 0 1px rgba(255,255,255,.02) inset}
+.row{margin:6px 0}.small{opacity:.85}
 kbd,code{background:#0f0f12;border:1px solid #2d2d32;border-radius:6px;padding:2px 6px}
-button{
-  background:#1c1c1f;color:#eaeaea;border:1px solid #2d2d32;
-  padding:10px 14px;border-radius:12px;margin:6px;cursor:pointer;
-}
-button:hover{background:#232327}
-button[disabled]{opacity:.5;cursor:not-allowed}
-input,select,textarea{
-  background:#0f0f12;color:#eaeaea;border:1px solid #2d2d32;border-radius:10px;
-  padding:8px;outline:none;
-}
+button{background:#1c1c1f;color:#eaeaea;border:1px solid #2d2d32;padding:10px 14px;border-radius:12px;margin:6px;cursor:pointer}
+button:hover{background:#232327}button[disabled]{opacity:.5;cursor:not-allowed}
+input,select,textarea{background:#0f0f12;color:#eaeaea;border:1px solid #2d2d32;border-radius:10px;padding:8px;outline:none}
 input[type=number]{width:140px}
 input[type=text]{width:100%;max-width:560px}
 textarea{width:100%;min-height:80px}
-pre{
-  background:#0f0f12;border:1px solid #2d2d32;border-radius:10px;padding:10px;
-  max-height:360px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-word;
-}
+pre{background:#0f0f12;border:1px solid #2d2d32;border-radius:10px;padding:10px;max-height:360px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-word}
 .grid{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
 .table{width:100%;border-collapse:collapse;font-size:13px}
-.table th,.table td{border-bottom:1px solid #1c1c21;padding:6px 8px;text-align:left}
+.table th,.table td{border-bottom:1px solid #1c1c21;padding:6px 8px;text-align:left;vertical-align:top}
+.table th{position:sticky;top:0;background:#0f0f12;z-index:1}
 .badge{display:inline-block;padding:0 8px;border-radius:999px;border:1px solid #2d2d32;background:#0f0f12}
 .success{color:#7dffa4}.warn{color:#ffd36b}.err{color:#ff8585}
 hr{border:none;border-top:1px solid #1c1c21;margin:12px 0}
 .flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .right{margin-left:auto}
 .help{font-size:12px;opacity:.9}
+.copy{cursor:pointer;border-bottom:1px dotted #444}
+.sticky{position:sticky;top:0;background:#101115;z-index:2}
 </style>
 </head>
 <body>
@@ -64,9 +53,7 @@ hr{border:none;border-top:1px solid #1c1c21;margin:12px 0}
 
   <!-- Connection -->
   <div class="card">
-    <div class="row small">
-      iPhone: open in <b>Bluefy/WebBLE</b> (Safari doesn’t support Web Bluetooth). Close the official S&B app first.
-    </div>
+    <div class="row small">iPhone: open in <b>Bluefy/WebBLE</b>. Close the official S&B app first.</div>
     <div class="flex">
       <div>Status: <span id="status" class="badge">Idle</span></div>
       <div class="right">Device: <span id="devName">—</span></div>
@@ -87,7 +74,26 @@ hr{border:none;border-top:1px solid #1c1c21;margin:12px 0}
       <button id="btnStopNotify">Stop All Notifications</button>
       <button id="btnPing">Ping RTT</button>
       <span id="rtt" class="small">RTT: — ms</span>
+      <button id="btnExportLogs">Export Logs</button>
+      <button id="btnClearLogs">Clear Logs</button>
     </div>
+  </div>
+
+  <!-- Search & filter -->
+  <div class="card">
+    <h3>Search / Filter</h3>
+    <div class="grid">
+      <input id="filterText" type="text" placeholder="Find by UUID fragment, prop (read/write/notify), or service prefix (1011…)" style="max-width:680px">
+      <button id="btnApplyFilter">Apply Filter</button>
+      <button id="btnClearFilter">Clear Filter</button>
+      <label class="small" style="display:flex;align-items:center;gap:6px">
+        <input id="showOnlyWritable" type="checkbox"> Show only writable
+      </label>
+      <label class="small" style="display:flex;align-items:center;gap:6px">
+        <input id="showOnlyNotify" type="checkbox"> Show only notifiable
+      </label>
+    </div>
+    <div class="help">Tip: type like <code>1013</code> or <code>notify</code> or <code>read</code> or a fragment like <code>…0E-5354…</code>. Click a UUID in the table to copy.</div>
   </div>
 
   <!-- Readouts -->
@@ -116,7 +122,7 @@ hr{border:none;border-top:1px solid #1c1c21;margin:12px 0}
       <button data-preset="185,195,205">Balanced</button>
       <button data-preset="190,205,215">Medical</button>
     </div>
-    <div class="help">Tip: If fan/heater don’t respond, hit <b>Monitor All Notifies</b>, press the physical buttons, copy the UUIDs that fire into Mapping below, then Save.</div>
+    <div class="help">If fan/heater don’t respond, hit <b>Monitor All Notifies</b>, press the physical buttons, note the UUIDs that fire, put them in Mapping, then Save.</div>
   </div>
 
   <!-- Mapping -->
@@ -162,7 +168,7 @@ hr{border:none;border-top:1px solid #1c1c21;margin:12px 0}
     <h3>Raw GATT Tools</h3>
     <div class="cols">
       <label>Characteristic UUID<br>
-        <input id="rawChar" type="text" placeholder="e.g. 10110001-5354-4F52-5A26-4249434B454C">
+        <input id="rawChar" type="text" placeholder="e.g. 10130004-5354-4F52-5A26-4249434B454C">
       </label>
       <label>Payload (hex for write, space-separated)<br>
         <input id="rawHex" type="text" placeholder="e.g. 01 or 6e 07 or 6e 07 00 00">
@@ -175,12 +181,22 @@ hr{border:none;border-top:1px solid #1c1c21;margin:12px 0}
     </div>
   </div>
 
-  <!-- Diagnostics -->
+  <!-- Discovery table -->
   <div class="card">
-    <h3>Discovery Diagnostics</h3>
-    <table class="table" id="diag"><thead>
-      <tr><th>Service UUID</th><th>Characteristic UUID</th><th>Props</th></tr>
-    </thead><tbody></tbody></table>
+    <div class="flex sticky">
+      <h3 style="margin:0">Discovery Table</h3>
+      <div class="right small">Click a UUID to copy</div>
+    </div>
+    <table class="table" id="diag">
+      <thead>
+        <tr>
+          <th>Service UUID</th>
+          <th>Characteristic UUID</th>
+          <th>Props</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 
   <!-- Logs -->
@@ -208,13 +224,10 @@ const DEFAULTS = {
   ctrlNt  : "00000003-1989-0108-1234-123456789ABC"
 };
 const CANDIDATE_TOGGLES = [
-  // 1011 (temp/setpoint block)
   "1011000F-5354-4F52-5A26-4249434B454C",
   "1011000C-5354-4F52-5A26-4249434B454C",
-  // 1010 (alt controls on some S&B devices)
   "1010000C-5354-4F52-5A26-4249434B454C",
   "1010000D-5354-4F52-5A26-4249434B454C",
-  // 1013 (misc/commands seen on your scans)
   "10130001-5354-4F52-5A26-4249434B454C",
   "10130002-5354-4F52-5A26-4249434B454C",
   "10130003-5354-4F52-5A26-4249434B454C",
@@ -258,19 +271,33 @@ const inpSet   = document.getElementById('inpSet');
 const diagBody = document.querySelector('#diag tbody');
 const autoReconnect = document.getElementById('autoReconnect');
 
+const filterText = document.getElementById('filterText');
+const showOnlyWritable = document.getElementById('showOnlyWritable');
+const showOnlyNotify = document.getElementById('showOnlyNotify');
+
 /* =========================================================================================
    STATE
 ========================================================================================= */
 let device, server;
-let chars = new Map();           // key: "service|char" -> BluetoothRemoteGATTCharacteristic
-let notifications = new Set();   // set of characteristic UUIDs we started notifications on
+let chars = new Map();         // key: "service|char" -> characteristic
+let propsMap = new Map();      // key -> props object for filter
+let notifications = new Set(); // char.uuid set
 let discovered = false;
 let reconnecting = false;
 
 /* =========================================================================================
    UTILITIES
 ========================================================================================= */
-function log(s){ console.log(s); logEl.textContent=(s+"\n"+logEl.textContent).slice(0,100000); }
+function log(s){ console.log(s); logEl.textContent=(s+"\n"+logEl.textContent).slice(0,120000); }
+function clearLogs(){ logEl.textContent=''; }
+function exportLogs(){
+  const blob = new Blob([logEl.textContent], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'volcano-logs.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 function setStatus(s){ statusEl.textContent=s; }
 function clampC(v){ v=Number(v)||0; return Math.max(MIN_C, Math.min(MAX_C, Math.round(v))); }
 function toTenths2(c){ const t=Math.round(c*10), b=new ArrayBuffer(2); new DataView(b).setUint16(0,t,true); return new Uint8Array(b); }
@@ -285,8 +312,11 @@ function optionalSvcList(){
     "10130000-5354-4F52-5A26-4249434B454C"
   ];
 }
+function copy(text){
+  navigator.clipboard?.writeText(text).then(()=>log(`copied: ${text}`)).catch(()=>{});
+}
 
-/* smart write: prefer with-response, fallback to no-response */
+/* smart write */
 async function writeSmart(ch, bytes){
   try{
     if(ch.properties.write && ch.writeValue){ await ch.writeValue(bytes); }
@@ -297,7 +327,7 @@ async function writeSmart(ch, bytes){
   }
 }
 
-/* find char from cache by uuid */
+/* lookup by char uuid */
 function getCharByUUID(uuid){
   for(const [key,ch] of chars.entries()){
     if(key.endsWith('|'+uuid)) return ch;
@@ -377,25 +407,22 @@ async function finishConnect(picked){
   server = await device.gatt.connect();
   setStatus('Connected');
 
-  // auto-reconnect
   device.addEventListener('gattserverdisconnected', async ()=>{
     setStatus('Disconnected');
     if(autoReconnect.checked && !reconnecting){
-      reconnecting = true;
-      log('Device disconnected. Trying auto-reconnect…');
+      reconnecting = true; log('Disconnected. Auto-reconnect…');
       try{
         await device.gatt.connect();
         setStatus('Connected');
         await discoverAll();
-        setStatus('Ready');
-        log('Auto-reconnect success.');
+        setStatus('Ready'); log('Auto-reconnect OK.');
       }catch(e){ log('Auto-reconnect failed: '+e); }
       reconnecting = false;
     }
   });
 
   await discoverAll();
-  await wakeSession(); // sometimes required before control writes
+  await wakeSession();
   setStatus('Ready');
 }
 
@@ -430,7 +457,7 @@ async function connectByService(){
 }
 async function reconnectOptional(){
   if(!navigator.bluetooth){ alert('Use Bluefy/WebBLE on iPhone.'); return; }
-  setStatus('Re-scanning (aggressive optionalServices)…');
+  setStatus('Re-scan (aggressive optionalServices)…');
   const dev = await navigator.bluetooth.requestDevice({
     acceptAllDevices:true,
     optionalServices: optionalSvcList().concat([DEFAULTS.ctrlSvc, DEFAULTS.svcTemp])
@@ -440,15 +467,43 @@ async function reconnectOptional(){
 async function disconnectNow(){
   try{ await stopAllNotifies(); }catch{}
   try{ if(device && device.gatt.connected) device.gatt.disconnect(); }catch{}
-  setStatus('Disconnected');
-  log('Disconnected.');
+  setStatus('Disconnected'); log('Disconnected.');
 }
 
 /* =========================================================================================
-   DISCOVERY / DIAGNOSTICS
+   DISCOVERY / FILTER / TABLE
 ========================================================================================= */
+function rowHTML(svc, chr, props){
+  const p = Object.keys(props).filter(k=>props[k]).join(', ')||'—';
+  return `<tr data-svc="${svc}" data-char="${chr}" data-props="${p}">
+    <td><code class="copy" data-copy="${svc}">${svc}</code></td>
+    <td><code class="copy" data-copy="${chr}">${chr}</code></td>
+    <td>${p}</td>
+  </tr>`;
+}
+function applyFilter(){
+  const q = filterText.value.trim().toLowerCase();
+  const onlyW = showOnlyWritable.checked;
+  const onlyN = showOnlyNotify.checked;
+  for(const tr of diagBody.querySelectorAll('tr')){
+    const svc = tr.getAttribute('data-svc').toLowerCase();
+    const chr = tr.getAttribute('data-char').toLowerCase();
+    const ps  = tr.getAttribute('data-props').toLowerCase();
+    let ok = true;
+    if(q) ok = svc.includes(q) || chr.includes(q) || ps.includes(q);
+    if(onlyW && !ps.includes('write')) ok=false;
+    if(onlyN && !ps.includes('notify')) ok=false;
+    tr.style.display = ok ? '' : 'none';
+  }
+}
+function bindCopyEvents(){
+  diagBody.querySelectorAll('.copy').forEach(el=>{
+    el.onclick = ()=> copy(el.getAttribute('data-copy'));
+  });
+}
+
 async function discoverAll(){
-  chars.clear(); notifications.clear(); discovered=false;
+  chars.clear(); propsMap.clear(); notifications.clear(); discovered=false;
   diagBody.innerHTML='';
   const services = await server.getPrimaryServices();
   for(const svc of services){
@@ -456,16 +511,14 @@ async function discoverAll(){
     try{ chs = await svc.getCharacteristics(); }catch{ chs=[]; }
     for(const ch of chs){
       const key = `${svc.uuid}|${ch.uuid}`;
-      chars.set(key, ch);
       const props = {read:!!ch.properties.read, write:!!(ch.properties.write||ch.properties.writeWithoutResponse), notify:!!ch.properties.notify};
+      chars.set(key, ch); propsMap.set(key, props);
+
       log(`FOUND ${key} props=${JSON.stringify(props)}`);
+      // table
+      diagBody.insertAdjacentHTML('beforeend', rowHTML(svc.uuid, ch.uuid, props));
 
-      // show in diagnostics table
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td><code>${svc.uuid}</code></td><td><code>${ch.uuid}</code></td><td>${Object.keys(props).filter(k=>props[k]).join(', ')||'—'}</td>`;
-      diagBody.appendChild(tr);
-
-      // quick READ for snapshot
+      // quick READ snapshot
       if(ch.properties.read){
         try{
           const v=await ch.readValue();
@@ -474,8 +527,9 @@ async function discoverAll(){
       }
     }
   }
+  bindCopyEvents();
 
-  // Subscribe to the mapped notifies
+  // Subscribe to mapped notifies
   try{
     const chT = getCharByUUID(charTempN.value.trim());
     await subscribeIf(chT, dv=>{
@@ -498,7 +552,7 @@ async function discoverAll(){
     });
   }catch(e){ log('Setpoint notify subscribe failed: '+e); }
 
-  // Try battery if exposed
+  // Battery if available
   try{
     const battLevelUUID = "00002a19-0000-1000-8000-00805f9b34fb";
     const chB = getCharByUUID(battLevelUUID);
@@ -514,7 +568,7 @@ async function discoverAll(){
   log('Discovery complete.');
 }
 
-/* wake session on the control write char (some devices want a nudge) */
+/* wake session on control write char if present */
 async function wakeSession(){
   try{
     const ch = getCharByUUID(DEFAULTS.ctrlWr);
@@ -526,7 +580,7 @@ async function wakeSession(){
 }
 
 /* =========================================================================================
-   ACTIONS: Temp / Heater / Fan
+   ACTIONS: Temp / Heater / Fan / Probe / Monitor
 ========================================================================================= */
 async function setTemp(){
   try{
@@ -559,7 +613,6 @@ async function pulseUUID(uuid,label){
 async function toggleHeater(){ await pulseUUID(charHeater.value.trim(),'heater'); }
 async function toggleFan(){ await pulseUUID(charFan.value.trim(),'fan'); }
 
-/* brute probe: try all candidates and all variants */
 async function probeToggles(){
   if(!discovered) await discoverAll();
   const worked=[];
@@ -583,11 +636,10 @@ async function probeToggles(){
     saveMapping();
     alert(`Probe found ${worked.length} writable toggles. Assign Heater/Fan if needed and Save.`);
   }else{
-    alert('No obvious toggle responded. Try Monitor All and press physical buttons to see which UUIDs fire.');
+    alert('No obvious toggle responded. Try Monitor All and press physical buttons.');
   }
 }
 
-/* subscribe to every notify to watch UUIDs changing */
 async function monitorAll(){
   if(!discovered) await discoverAll();
   for (const [key,ch] of chars.entries()){
@@ -603,7 +655,7 @@ async function monitorAll(){
       }
     }catch{}
   }
-  alert('Monitoring all notifies. Press Fan/Heater on the Volcano and watch Logs for UUIDs that change.');
+  alert('Monitoring all notifies. Press Fan/Heater on the device and watch Logs for UUIDs that change.');
 }
 
 /* =========================================================================================
@@ -638,7 +690,6 @@ async function rawWrite(){
 async function pingRTT(){
   const t0 = performance.now();
   try{
-    // try a quick read on setpoint notify if readable; else any readable characteristic
     let ch;
     try{ ch = getCharByUUID(charSpN.value.trim()); }
     catch{
@@ -665,6 +716,8 @@ document.getElementById('btnDisconnect').onclick      = disconnectNow;
 document.getElementById('btnDiscover').onclick        = async ()=>{ if(!server){alert('Connect first.');return;} await discoverAll(); };
 document.getElementById('btnStopNotify').onclick      = stopAllNotifies;
 document.getElementById('btnPing').onclick            = pingRTT;
+document.getElementById('btnExportLogs').onclick      = exportLogs;
+document.getElementById('btnClearLogs').onclick       = clearLogs;
 
 document.getElementById('btnSet').onclick             = setTemp;
 document.getElementById('btnHeater').onclick          = toggleHeater;
@@ -681,12 +734,15 @@ document.getElementById('btnRawRead').onclick         = rawRead;
 document.getElementById('btnRawNotify').onclick       = rawNotify;
 document.getElementById('btnRawWrite').onclick        = rawWrite;
 
+document.getElementById('btnApplyFilter').onclick     = applyFilter;
+document.getElementById('btnClearFilter').onclick     = ()=>{ filterText.value=''; showOnlyWritable.checked=false; showOnlyNotify.checked=false; applyFilter(); };
+
 for (const btn of document.querySelectorAll('[data-preset]')){
   btn.addEventListener('click', async ()=>{
     for (const s of btn.dataset.preset.split(',')){
       inpSet.value = parseInt(s,10);
       await setTemp();
-      await new Promise(r=>setTimeout(r, 60000)); // 1 min steps
+      await new Promise(r=>setTimeout(r, 60000));
     }
   });
 }
